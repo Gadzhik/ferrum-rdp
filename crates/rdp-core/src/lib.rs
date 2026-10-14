@@ -7,5 +7,5 @@ pub mod session;
 pub use framebuffer::{FrameBuffer, Rect};
 pub use session::{
     AuthReason, Button, CertVerdict, CertificateInfo, Config, Credentials, Cursor, Error, Handler,
-    Monitor, RailWindow, Session, SessionHandle, State, error_message, rail,
+    Monitor, RailWindow, Session, SessionHandle, State, error_message, rail, validate,
 };

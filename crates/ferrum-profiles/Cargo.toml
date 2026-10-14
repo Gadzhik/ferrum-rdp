@@ -13,3 +13,4 @@ directories = "6"
 
 [dev-dependencies]
 tempfile = "3"
+rdp-core = { path = "../rdp-core" }

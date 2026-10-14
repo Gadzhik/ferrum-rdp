@@ -50,7 +50,10 @@ impl AuthReason {
     }
 
     pub fn is_gateway(&self) -> bool {
-        matches!(self, Self::GatewayHttp | Self::GatewayRdg | Self::GatewayRpc)
+        matches!(
+            self,
+            Self::GatewayHttp | Self::GatewayRdg | Self::GatewayRpc
+        )
     }
 
     pub fn is_pin(&self) -> bool {
@@ -251,41 +254,53 @@ pub struct Session {
     thread: Option<JoinHandle<()>>,
 }
 
+struct NoopHandler;
+impl Handler for NoopHandler {}
+
+/// Check that FreeRDP accepts the configuration, without connecting.
+pub fn validate(config: &Config) -> Result<(), Error> {
+    configure(config, Arc::new(NoopHandler)).map(drop)
+}
+
+fn configure(config: &Config, handler: Arc<dyn Handler>) -> Result<Arc<Inner>, Error> {
+    let cell = Box::into_raw(Box::new(HandlerCell { handler }));
+    let callbacks = callbacks(cell as *mut c_void);
+    let raw = unsafe { sys::ferrum_session_new(&callbacks) };
+    if raw.is_null() {
+        unsafe { drop(Box::from_raw(cell)) };
+        return Err(Error::Create);
+    }
+    let inner = Arc::new(Inner { raw, cell });
+
+    let mut argv: Vec<CString> = vec![c"ferrum".to_owned()];
+    argv.extend(config.args.iter().map(|a| cstring(a)));
+    let ptrs: Vec<*const c_char> = argv.iter().map(|a| a.as_ptr()).collect();
+    let rc = unsafe { sys::ferrum_session_parse_args(raw, ptrs.len() as c_int, ptrs.as_ptr()) };
+    if rc != 0 {
+        return Err(Error::Arguments(rc));
+    }
+
+    for (name, value) in &config.settings {
+        let (n, v) = (cstring(name), cstring(value));
+        if !unsafe { sys::ferrum_session_set(raw, n.as_ptr(), v.as_ptr()) } {
+            return Err(Error::Setting(name.clone()));
+        }
+    }
+
+    if !config.monitors.is_empty()
+        && !unsafe {
+            sys::ferrum_session_set_monitors(raw, config.monitors.as_ptr(), config.monitors.len())
+        }
+    {
+        return Err(Error::Monitors);
+    }
+    Ok(inner)
+}
+
 impl Session {
     /// Configure and start connecting on a background thread.
     pub fn connect(config: &Config, handler: Arc<dyn Handler>) -> Result<Session, Error> {
-        let cell = Box::into_raw(Box::new(HandlerCell { handler }));
-        let callbacks = callbacks(cell as *mut c_void);
-        let raw = unsafe { sys::ferrum_session_new(&callbacks) };
-        if raw.is_null() {
-            unsafe { drop(Box::from_raw(cell)) };
-            return Err(Error::Create);
-        }
-        let inner = Arc::new(Inner { raw, cell });
-
-        let mut argv: Vec<CString> = vec![c"ferrum".to_owned()];
-        argv.extend(config.args.iter().map(|a| cstring(a)));
-        let ptrs: Vec<*const c_char> = argv.iter().map(|a| a.as_ptr()).collect();
-        let rc = unsafe { sys::ferrum_session_parse_args(raw, ptrs.len() as c_int, ptrs.as_ptr()) };
-        if rc != 0 {
-            return Err(Error::Arguments(rc));
-        }
-
-        for (name, value) in &config.settings {
-            let (n, v) = (cstring(name), cstring(value));
-            if !unsafe { sys::ferrum_session_set(raw, n.as_ptr(), v.as_ptr()) } {
-                return Err(Error::Setting(name.clone()));
-            }
-        }
-
-        if !config.monitors.is_empty()
-            && !unsafe {
-                sys::ferrum_session_set_monitors(raw, config.monitors.as_ptr(), config.monitors.len())
-            }
-        {
-            return Err(Error::Monitors);
-        }
-
+        let inner = configure(config, handler)?;
         let thread_inner = inner.clone();
         let thread = std::thread::Builder::new()
             .name("rdp-session".into())
@@ -296,7 +311,10 @@ impl Session {
             })
             .map_err(|_| Error::Create)?;
 
-        Ok(Session { handle: SessionHandle { inner }, thread: Some(thread) })
+        Ok(Session {
+            handle: SessionHandle { inner },
+            thread: Some(thread),
+        })
     }
 
     pub fn handle(&self) -> SessionHandle {
@@ -577,8 +595,13 @@ unsafe extern "C" fn cb_frame(
     let len = stride as usize * height as usize;
     let data = unsafe { std::slice::from_raw_parts(data, len) };
     let raw = unsafe { std::slice::from_raw_parts(rects, nrects * 4) };
-    let rects: Vec<Rect> = raw.chunks_exact(4).map(|r| Rect::new(r[0], r[1], r[2], r[3])).collect();
-    with_handler(user, (), |h| h.frame(data, stride as usize, width, height, &rects));
+    let rects: Vec<Rect> = raw
+        .chunks_exact(4)
+        .map(|r| Rect::new(r[0], r[1], r[2], r[3]))
+        .collect();
+    with_handler(user, (), |h| {
+        h.frame(data, stride as usize, width, height, &rects)
+    });
 }
 
 unsafe extern "C" fn cb_cursor(
@@ -630,9 +653,17 @@ unsafe extern "C" fn cb_authenticate(
     domain: *mut *mut c_char,
 ) -> bool {
     let read = |p: *mut *mut c_char| unsafe {
-        if p.is_null() { String::new() } else { str_or_empty(*p) }
+        if p.is_null() {
+            String::new()
+        } else {
+            str_or_empty(*p)
+        }
     };
-    let current = Credentials { username: read(username), password: read(password), domain: read(domain) };
+    let current = Credentials {
+        username: read(username),
+        password: read(password),
+        domain: read(domain),
+    };
     let reason = AuthReason::from_raw(reason);
     match with_handler(user, None, |h| h.authenticate(reason, current)) {
         Some(c) => {
@@ -663,7 +694,8 @@ unsafe extern "C" fn cb_verify_certificate(
             subject: str_or_empty(i.subject),
             issuer: str_or_empty(i.issuer),
             fingerprint: str_or_empty(i.fingerprint),
-            old: opt_str(i.old_fingerprint).map(|fp| (str_or_empty(i.old_subject), str_or_empty(i.old_issuer), fp)),
+            old: opt_str(i.old_fingerprint)
+                .map(|fp| (str_or_empty(i.old_subject), str_or_empty(i.old_issuer), fp)),
             flags: i.flags,
         }
     };
@@ -682,7 +714,9 @@ unsafe extern "C" fn cb_gateway_message(
     message: *const c_char,
 ) -> bool {
     let msg = unsafe { str_or_empty(message) };
-    with_handler(user, !consent_mandatory, |h| h.gateway_message(msg, consent_mandatory))
+    with_handler(user, !consent_mandatory, |h| {
+        h.gateway_message(msg, consent_mandatory)
+    })
 }
 
 unsafe extern "C" fn cb_choose_smartcard(
@@ -690,7 +724,9 @@ unsafe extern "C" fn cb_choose_smartcard(
     names: *const *const c_char,
     count: usize,
 ) -> c_int {
-    let names: Vec<String> = (0..count).map(|i| unsafe { str_or_empty(*names.add(i)) }).collect();
+    let names: Vec<String> = (0..count)
+        .map(|i| unsafe { str_or_empty(*names.add(i)) })
+        .collect();
     match with_handler(user, Some(0), |h| h.choose_smartcard(names)) {
         Some(i) if i < count => i as c_int,
         _ => -1,
@@ -702,8 +738,14 @@ unsafe extern "C" fn cb_logon_error(user: *mut c_void, data: *const c_char, kind
     with_handler(user, (), |h| h.logon_error(d, k));
 }
 
-unsafe extern "C" fn cb_clip_remote_offer(user: *mut c_void, mimes: *const *const c_char, count: usize) {
-    let mimes: Vec<String> = (0..count).map(|i| unsafe { str_or_empty(*mimes.add(i)) }).collect();
+unsafe extern "C" fn cb_clip_remote_offer(
+    user: *mut c_void,
+    mimes: *const *const c_char,
+    count: usize,
+) {
+    let mimes: Vec<String> = (0..count)
+        .map(|i| unsafe { str_or_empty(*mimes.add(i)) })
+        .collect();
     with_handler(user, (), |h| h.clipboard_remote_offer(mimes));
 }
 
@@ -716,7 +758,11 @@ unsafe extern "C" fn cb_clip_remote_data(user: *mut c_void, id: u64, data: *cons
     with_handler(user, (), |h| h.clipboard_remote_data(id, data));
 }
 
-unsafe extern "C" fn cb_clip_local_get(user: *mut c_void, mime: *const c_char, len: *mut usize) -> *mut u8 {
+unsafe extern "C" fn cb_clip_local_get(
+    user: *mut c_void,
+    mime: *const c_char,
+    len: *mut usize,
+) -> *mut u8 {
     let mime = unsafe { str_or_empty(mime) };
     let Some(data) = with_handler(user, None, |h| h.clipboard_local_get(&mime)) else {
         return ptr::null_mut();
@@ -757,7 +803,13 @@ unsafe extern "C" fn cb_rail_window_delete(user: *mut c_void, id: u64) {
     with_handler(user, (), |h| h.rail_window_delete(id));
 }
 
-unsafe extern "C" fn cb_rail_window_icon(user: *mut c_void, id: u64, bgra: *const u8, width: u32, height: u32) {
+unsafe extern "C" fn cb_rail_window_icon(
+    user: *mut c_void,
+    id: u64,
+    bgra: *const u8,
+    width: u32,
+    height: u32,
+) {
     if bgra.is_null() {
         return;
     }
@@ -765,7 +817,12 @@ unsafe extern "C" fn cb_rail_window_icon(user: *mut c_void, id: u64, bgra: *cons
     with_handler(user, (), |h| h.rail_window_icon(id, data, width, height));
 }
 
-unsafe extern "C" fn cb_rail_exec_result(user: *mut c_void, result: u32, raw: u32, program: *const c_char) {
+unsafe extern "C" fn cb_rail_exec_result(
+    user: *mut c_void,
+    result: u32,
+    raw: u32,
+    program: *const c_char,
+) {
     let p = unsafe { str_or_empty(program) };
     with_handler(user, (), |h| h.rail_exec_result(result, raw, p));
 }

@@ -130,7 +130,10 @@ impl FrameBuffer {
         self.damage.retain(|d| !r.contains(d));
         self.damage.push(r);
         if self.damage.len() > MAX_DAMAGE_RECTS {
-            let all = self.damage.iter().fold(Rect::default(), |acc, d| acc.union(d));
+            let all = self
+                .damage
+                .iter()
+                .fold(Rect::default(), |acc, d| acc.union(d));
             self.damage.clear();
             self.damage.push(all);
         }

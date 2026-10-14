@@ -203,7 +203,13 @@ unsafe extern "C" {
     );
     pub fn ferrum_input_mouse_move(s: *mut ferrum_session, x: i32, y: i32);
     pub fn ferrum_input_mouse_rel(s: *mut ferrum_session, dx: i32, dy: i32);
-    pub fn ferrum_input_mouse_button(s: *mut ferrum_session, button: u32, down: bool, x: i32, y: i32);
+    pub fn ferrum_input_mouse_button(
+        s: *mut ferrum_session,
+        button: u32,
+        down: bool,
+        x: i32,
+        y: i32,
+    );
     pub fn ferrum_input_wheel(s: *mut ferrum_session, horizontal: bool, delta: i32, x: i32, y: i32);
     pub fn ferrum_input_focus_in(s: *mut ferrum_session);
 
@@ -216,7 +222,11 @@ unsafe extern "C" {
     pub fn ferrum_refresh(s: *mut ferrum_session);
     pub fn ferrum_suppress_output(s: *mut ferrum_session, suppress: bool);
 
-    pub fn ferrum_clip_local_offer(s: *mut ferrum_session, mimes: *const *const c_char, count: usize);
+    pub fn ferrum_clip_local_offer(
+        s: *mut ferrum_session,
+        mimes: *const *const c_char,
+        count: usize,
+    );
     pub fn ferrum_clip_request_remote(s: *mut ferrum_session, mime: *const c_char, request_id: u64);
 
     pub fn ferrum_rail_activate(s: *mut ferrum_session, window_id: u64, active: bool);

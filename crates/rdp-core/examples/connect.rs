@@ -25,10 +25,16 @@ impl Handler for Probe {
         self.fb.lock().unwrap().resize(width, height);
     }
     fn frame(&self, data: &[u8], stride: usize, width: u32, height: u32, rects: &[Rect]) {
-        self.fb.lock().unwrap().blit(data, stride, width, height, rects);
+        self.fb
+            .lock()
+            .unwrap()
+            .blit(data, stride, width, height, rects);
     }
     fn verify_certificate(&self, info: CertificateInfo) -> CertVerdict {
-        eprintln!("certificate {} for {}:{} accepted once", info.fingerprint, info.host, info.port);
+        eprintln!(
+            "certificate {} for {}:{} accepted once",
+            info.fingerprint, info.host, info.port
+        );
         CertVerdict::AcceptOnce
     }
     fn clipboard_remote_offer(&self, mimes: Vec<String>) {
@@ -51,7 +57,10 @@ fn main() {
     };
 
     let probe = Arc::new(Probe::default());
-    let config = Config { args, ..Default::default() };
+    let config = Config {
+        args,
+        ..Default::default()
+    };
     let session = Session::connect(&config, probe.clone()).expect("session");
 
     let deadline = Instant::now() + Duration::from_secs(secs);
@@ -79,6 +88,9 @@ fn main() {
     let mut enc = png::Encoder::new(std::io::BufWriter::new(file), fb.width, fb.height);
     enc.set_color(png::ColorType::Rgba);
     enc.set_depth(png::BitDepth::Eight);
-    enc.write_header().unwrap().write_image_data(&fb.to_rgba()).unwrap();
+    enc.write_header()
+        .unwrap()
+        .write_image_data(&fb.to_rgba())
+        .unwrap();
     eprintln!("saved {}x{} to {out}", fb.width, fb.height);
 }

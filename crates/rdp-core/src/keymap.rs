@@ -27,17 +27,17 @@ pub fn evdev_to_rdp(code: u32) -> Option<u32> {
     let sc = match code {
         // KEY_ESC .. KEY_KPDOT: identical to set 1
         1..=83 => code,
-        85 => 0x76,  // KEY_ZENKAKUHANKAKU
-        86 => 0x56,  // KEY_102ND
-        87 => 0x57,  // KEY_F11
-        88 => 0x58,  // KEY_F12
-        89 => 0x73,  // KEY_RO (ABNT_C1)
-        90 => 0x78,  // KEY_KATAKANA
-        91 => 0x77,  // KEY_HIRAGANA
-        92 => 0x79,  // KEY_HENKAN (convert)
-        93 => 0x70,  // KEY_KATAKANAHIRAGANA
-        94 => 0x7B,  // KEY_MUHENKAN (nonconvert)
-        95 => 0x5C,  // KEY_KPJPCOMMA
+        85 => 0x76,       // KEY_ZENKAKUHANKAKU
+        86 => 0x56,       // KEY_102ND
+        87 => 0x57,       // KEY_F11
+        88 => 0x58,       // KEY_F12
+        89 => 0x73,       // KEY_RO (ABNT_C1)
+        90 => 0x78,       // KEY_KATAKANA
+        91 => 0x77,       // KEY_HIRAGANA
+        92 => 0x79,       // KEY_HENKAN (convert)
+        93 => 0x70,       // KEY_KATAKANAHIRAGANA
+        94 => 0x7B,       // KEY_MUHENKAN (nonconvert)
+        95 => 0x5C,       // KEY_KPJPCOMMA
         96 => ext(0x1C),  // KEY_KPENTER
         97 => ext(0x1D),  // KEY_RIGHTCTRL
         98 => ext(0x35),  // KEY_KPSLASH
@@ -94,7 +94,7 @@ pub fn evdev_to_rdp(code: u32) -> Option<u32> {
         191 => 0x6C,
         192 => 0x6D,
         193 => 0x6E,
-        194 => 0x6F, // KEY_F24
+        194 => 0x6F,      // KEY_F24
         217 => ext(0x65), // KEY_SEARCH
         226 => ext(0x6D), // KEY_MEDIA
         _ => return None,
