@@ -187,6 +187,9 @@ pub trait Handler: Send + Sync + 'static {
     fn rail_window_delete(&self, id: u64) {}
     fn rail_window_icon(&self, id: u64, bgra: &[u8], width: u32, height: u32) {}
     fn rail_exec_result(&self, result: u32, raw: u32, program: String) {}
+    /// `move_type`: 1..=8 resize edge (left, right, top, top-left, top-right,
+    /// bottom, bottom-left, bottom-right), 9 move, 10/11 keyboard move/size.
+    fn rail_local_move_size(&self, id: u64, start: bool, move_type: u32, x: i32, y: i32) {}
 }
 
 #[derive(Debug)]
@@ -563,6 +566,7 @@ fn callbacks(user: *mut c_void) -> sys::ferrum_callbacks {
         rail_window_delete: Some(cb_rail_window_delete),
         rail_window_icon: Some(cb_rail_window_icon),
         rail_exec_result: Some(cb_rail_exec_result),
+        rail_local_move_size: Some(cb_rail_local_move_size),
     }
 }
 
@@ -825,4 +829,17 @@ unsafe extern "C" fn cb_rail_exec_result(
 ) {
     let p = unsafe { str_or_empty(program) };
     with_handler(user, (), |h| h.rail_exec_result(result, raw, p));
+}
+
+unsafe extern "C" fn cb_rail_local_move_size(
+    user: *mut c_void,
+    id: u64,
+    start: bool,
+    move_type: u32,
+    x: i32,
+    y: i32,
+) {
+    with_handler(user, (), |h| {
+        h.rail_local_move_size(id, start, move_type, x, y)
+    });
 }

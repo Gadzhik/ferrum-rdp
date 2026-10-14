@@ -1136,9 +1136,12 @@ static UINT rail_noop_sysparam(WINPR_ATTR_UNUSED RailClientContext* rail,
 	return CHANNEL_RC_OK;
 }
 
-static UINT rail_noop_movesize(WINPR_ATTR_UNUSED RailClientContext* rail,
-                               WINPR_ATTR_UNUSED const RAIL_LOCALMOVESIZE_ORDER* p)
+static UINT rail_local_movesize(RailClientContext* rail, const RAIL_LOCALMOVESIZE_ORDER* p)
 {
+	ferrum_session* s = rail->custom;
+	if (s && s->cb.rail_local_move_size)
+		s->cb.rail_local_move_size(s->cb.user, p->windowId, p->isMoveSizeStart, p->moveSizeType,
+		                           p->posX, p->posY);
 	return CHANNEL_RC_OK;
 }
 
@@ -1179,7 +1182,7 @@ static void rail_init(ferrum_session* s, RailClientContext* rail)
 	rail->ServerHandshakeEx = rail_handshake_ex;
 	rail->ServerExecuteResult = rail_exec_result;
 	rail->ServerSystemParam = rail_noop_sysparam;
-	rail->ServerLocalMoveSize = rail_noop_movesize;
+	rail->ServerLocalMoveSize = rail_local_movesize;
 	rail->ServerMinMaxInfo = rail_noop_minmax;
 	rail->ServerLanguageBarInfo = rail_noop_langbar;
 	rail->ServerGetAppIdResponse = rail_noop_appid;
@@ -1807,9 +1810,6 @@ void ferrum_input_wheel(ferrum_session* s, bool horizontal, int32_t delta,
 {
 	if (!s || delta == 0)
 		return;
-	/* RDP horizontal wheel is inverted relative to vertical */
-	if (horizontal)
-		delta = -delta;
 	EnterCriticalSection(&s->lock);
 	while (s->active && delta != 0)
 	{

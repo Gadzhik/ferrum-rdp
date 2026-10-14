@@ -167,6 +167,16 @@ pub struct ferrum_callbacks {
             program: *const c_char,
         ),
     >,
+    pub rail_local_move_size: Option<
+        unsafe extern "C" fn(
+            user: *mut c_void,
+            window_id: u64,
+            start: bool,
+            move_type: u32,
+            x: i32,
+            y: i32,
+        ),
+    >,
 }
 
 unsafe extern "C" {

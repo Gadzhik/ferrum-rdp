@@ -139,6 +139,10 @@ typedef struct
 	                         uint32_t width, uint32_t height);
 	void (*rail_exec_result)(void* user, uint32_t exec_result, uint32_t raw_result,
 	                         const char* program);
+	/* The server asks the client to move/resize a window locally (title bar drag).
+	 * move_type: 1..8 = resize edges (RAIL_WMSZ_*), 9 = move, 10/11 = keyboard */
+	void (*rail_local_move_size)(void* user, uint64_t window_id, bool start, uint32_t move_type,
+	                             int32_t x, int32_t y);
 } ferrum_callbacks;
 
 /* ---- lifecycle ---- */
