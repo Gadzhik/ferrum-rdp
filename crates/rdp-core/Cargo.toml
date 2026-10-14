@@ -1,0 +1,12 @@
+[package]
+name = "rdp-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+freerdp-sys = { path = "../freerdp-sys" }
+tracing.workspace = true
+
+[dev-dependencies]
+png = "0.18"
