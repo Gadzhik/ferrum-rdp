@@ -227,10 +227,11 @@ impl RailManager {
         if let Some(win) = removed {
             win.window.destroy();
         }
-        if self.windows.borrow().is_empty() && self.had_windows.get() {
-            if let Some(cb) = self.on_empty.borrow().as_ref() {
-                cb();
-            }
+        if self.windows.borrow().is_empty()
+            && self.had_windows.get()
+            && let Some(cb) = self.on_empty.borrow().as_ref()
+        {
+            cb();
         }
     }
 

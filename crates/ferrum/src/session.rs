@@ -181,6 +181,7 @@ pub struct SessionPage {
     status_page: adw::StatusPage,
     status_label: gtk::Label,
     error_page: adw::StatusPage,
+    sign_in_again: gtk::Button,
     banner: adw::Banner,
 
     session: RefCell<Option<Session>>,
@@ -307,6 +308,7 @@ impl SessionPage {
             status_page,
             status_label,
             error_page,
+            sign_in_again: edit_retry.clone(),
             banner,
             session: RefCell::new(None),
             handle: RefCell::new(None),
@@ -420,12 +422,12 @@ impl SessionPage {
             #[strong]
             weak,
             move |_| {
-                if let Some(p) = weak.upgrade() {
-                    if p.multimon.borrow().is_none() && p.rail.borrow().is_none() {
-                        if let Some(h) = p.handle() {
-                            h.suppress_output(true);
-                        }
-                    }
+                if let Some(p) = weak.upgrade()
+                    && p.multimon.borrow().is_none()
+                    && p.rail.borrow().is_none()
+                    && let Some(h) = p.handle()
+                {
+                    h.suppress_output(true);
                 }
             }
         ));
@@ -556,14 +558,14 @@ impl SessionPage {
             .build();
         let root = self.root.clone();
         dialog.save(Some(parent), gio::Cancellable::NONE, move |res| {
-            if let Ok(file) = res {
-                if let Some(path) = file.path() {
-                    let msg = match texture.save_to_png(&path) {
-                        Ok(()) => format!("Saved {}", path.display()),
-                        Err(e) => format!("Could not save screenshot: {e}"),
-                    };
-                    root.add_toast(adw::Toast::new(&msg));
-                }
+            if let Ok(file) = res
+                && let Some(path) = file.path()
+            {
+                let msg = match texture.save_to_png(&path) {
+                    Ok(()) => format!("Saved {}", path.display()),
+                    Err(e) => format!("Could not save screenshot: {e}"),
+                };
+                root.add_toast(adw::Toast::new(&msg));
             }
         });
     }
@@ -581,10 +583,11 @@ impl SessionPage {
         let page = self.clone();
         let epoch = self.epoch.get();
         glib::spawn_future_local(async move {
-            if let Err(e) = page.run_connect(epoch).await {
-                if page.epoch.get() == epoch && !page.user_disconnect.get() {
-                    page.show_error(&format!("{e:#}"), false);
-                }
+            if let Err(e) = page.run_connect(epoch).await
+                && page.epoch.get() == epoch
+                && !page.user_disconnect.get()
+            {
+                page.show_error(&format!("{e:#}"), false);
             }
         });
     }
@@ -908,20 +911,20 @@ impl SessionPage {
                     let _ = reply.send(None);
                     return;
                 };
-                if let Some(p) = weak.upgrade() {
-                    if answer.remember {
-                        let kind = if reason.is_gateway() {
-                            Kind::Gateway
-                        } else {
-                            Kind::Session
-                        };
-                        p.pending_secret
-                            .replace(Some((kind, answer.credentials.password.clone())));
-                        if !reason.is_gateway() {
-                            let mut prof = p.profile.borrow_mut();
-                            prof.username = answer.credentials.username.clone();
-                            prof.domain = answer.credentials.domain.clone();
-                        }
+                if let Some(p) = weak.upgrade()
+                    && answer.remember
+                {
+                    let kind = if reason.is_gateway() {
+                        Kind::Gateway
+                    } else {
+                        Kind::Session
+                    };
+                    p.pending_secret
+                        .replace(Some((kind, answer.credentials.password.clone())));
+                    if !reason.is_gateway() {
+                        let mut prof = p.profile.borrow_mut();
+                        prof.username = answer.credentials.username.clone();
+                        prof.domain = answer.credentials.domain.clone();
                     }
                 }
                 let _ = reply.send(Some(answer.credentials));
@@ -1027,6 +1030,7 @@ impl SessionPage {
     }
 
     fn show_error(&self, text: &str, auth: bool) {
+        self.sign_in_again.set_visible(auth);
         self.set_state(PageState::Failed);
         self.request_fullscreen(Some(false));
         self.error_page.set_title(if auth {

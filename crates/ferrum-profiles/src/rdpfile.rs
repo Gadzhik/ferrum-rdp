@@ -67,11 +67,11 @@ fn string(map: &BTreeMap<String, String>, key: &str) -> Option<String> {
 /// Split `host[:port]`, handling `[v6]:port`.
 pub fn split_host_port(addr: &str) -> (String, Option<u16>) {
     let addr = addr.trim();
-    if let Some(rest) = addr.strip_prefix('[') {
-        if let Some((h, tail)) = rest.split_once(']') {
-            let port = tail.strip_prefix(':').and_then(|p| p.parse().ok());
-            return (h.to_string(), port);
-        }
+    if let Some(rest) = addr.strip_prefix('[')
+        && let Some((h, tail)) = rest.split_once(']')
+    {
+        let port = tail.strip_prefix(':').and_then(|p| p.parse().ok());
+        return (h.to_string(), port);
     }
     match addr.rsplit_once(':') {
         // a bare IPv6 address has several colons and no port
@@ -116,13 +116,15 @@ pub fn import(text: &str, name_hint: &str) -> Profile {
         p.display.mode = WindowMode::Fullscreen;
     }
     let dynamic = flag(&m, "dynamic resolution").unwrap_or(true);
-    if let (Some(w), Some(h)) = (int(&m, "desktopwidth"), int(&m, "desktopheight")) {
-        if !dynamic && w > 0 && h > 0 {
-            p.display.resolution = Resolution::Fixed {
-                width: w as u32,
-                height: h as u32,
-            };
-        }
+    if let (Some(w), Some(h)) = (int(&m, "desktopwidth"), int(&m, "desktopheight"))
+        && !dynamic
+        && w > 0
+        && h > 0
+    {
+        p.display.resolution = Resolution::Fixed {
+            width: w as u32,
+            height: h as u32,
+        };
     }
     p.display.multimon = flag(&m, "use multimon").unwrap_or(false);
     if let Some(bpp) = int(&m, "session bpp") {

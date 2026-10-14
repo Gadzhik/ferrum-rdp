@@ -95,11 +95,11 @@ pub fn authenticate(
                 domain: domain.text().to_string(),
             };
             // Accept DOMAIN\user and user@domain in the user field.
-            if creds.domain.is_empty() {
-                if let Some((d, u)) = creds.username.clone().split_once('\\') {
-                    creds.domain = d.into();
-                    creds.username = u.into();
-                }
+            if creds.domain.is_empty()
+                && let Some((d, u)) = creds.username.clone().split_once('\\')
+            {
+                creds.domain = d.into();
+                creds.username = u.into();
             }
             reply(Some(AuthAnswer {
                 credentials: creds,

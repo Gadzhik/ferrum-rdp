@@ -18,10 +18,10 @@ fn parse_ini(text: &str) -> HashMap<String, String> {
             section = s.to_string();
             continue;
         }
-        if section == "remmina" {
-            if let Some((k, v)) = line.split_once('=') {
-                map.insert(k.trim().to_string(), v.trim().to_string());
-            }
+        if section == "remmina"
+            && let Some((k, v)) = line.split_once('=')
+        {
+            map.insert(k.trim().to_string(), v.trim().to_string());
         }
     }
     map
@@ -52,21 +52,21 @@ pub fn import(text: &str) -> Option<Profile> {
         p.display.mode = WindowMode::Fullscreen;
     }
     // resolution_mode: 0/1 = use client resolution, 2 = custom
-    if get("resolution_mode") == "2" {
-        if let (Ok(w), Ok(h)) = (
+    if get("resolution_mode") == "2"
+        && let (Ok(w), Ok(h)) = (
             get("resolution_width").parse(),
             get("resolution_height").parse(),
-        ) {
-            p.display.resolution = Resolution::Fixed {
-                width: w,
-                height: h,
-            };
-        }
+        )
+    {
+        p.display.resolution = Resolution::Fixed {
+            width: w,
+            height: h,
+        };
     }
-    if let Ok(bpp) = get("colordepth").parse::<u32>() {
-        if matches!(bpp, 8 | 15 | 16 | 24 | 32) {
-            p.display.color_depth = bpp;
-        }
+    if let Ok(bpp) = get("colordepth").parse::<u32>()
+        && matches!(bpp, 8 | 15 | 16 | 24 | 32)
+    {
+        p.display.color_depth = bpp;
     }
     p.display.multimon = on("multimon");
 
@@ -156,7 +156,7 @@ pub fn import_dir(dir: &Path) -> Vec<Profile> {
         .filter_map(|p| std::fs::read_to_string(p).ok())
         .filter_map(|t| import(&t))
         .collect();
-    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    out.sort_by_key(|a| a.name.to_lowercase());
     out
 }
 

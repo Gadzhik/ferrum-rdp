@@ -82,10 +82,10 @@ mod imp {
     impl WidgetImpl for SessionView {
         fn size_allocate(&self, width: i32, height: i32, baseline: i32) {
             self.parent_size_allocate(width, height, baseline);
-            if self.last_alloc.replace((width, height)) != (width, height) {
-                if let Some(cb) = self.resize_cb.borrow().as_ref() {
-                    cb(width, height);
-                }
+            if self.last_alloc.replace((width, height)) != (width, height)
+                && let Some(cb) = self.resize_cb.borrow().as_ref()
+            {
+                cb(width, height);
             }
         }
 

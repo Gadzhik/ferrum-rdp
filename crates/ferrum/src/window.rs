@@ -475,10 +475,9 @@ impl MainWindow {
                 if let Some(tv) = root
                     .ancestor(adw::TabView::static_type())
                     .and_downcast::<adw::TabView>()
+                    && let Some(tab) = find_tab(&root)
                 {
-                    if let Some(tab) = find_tab(&root) {
-                        tv.close_page(&tab);
-                    }
+                    tv.close_page(&tab);
                 }
             }
         ));
@@ -658,13 +657,13 @@ impl MainWindow {
                     let _ = keyring::delete(id, Kind::Session).await;
                 });
             }
-            if p.gateway.save_password {
-                if let Some(pw) = result.gateway_password {
-                    let label = format!("RD Gateway password for {}", p.display_name());
-                    glib::spawn_future_local(async move {
-                        let _ = keyring::store(id, Kind::Gateway, &label, &pw).await;
-                    });
-                }
+            if p.gateway.save_password
+                && let Some(pw) = result.gateway_password
+            {
+                let label = format!("RD Gateway password for {}", p.display_name());
+                glib::spawn_future_local(async move {
+                    let _ = keyring::store(id, Kind::Gateway, &label, &pw).await;
+                });
             }
             st.store.borrow_mut().upsert(p);
             st.save_store();

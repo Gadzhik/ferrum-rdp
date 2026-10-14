@@ -54,11 +54,11 @@ pub fn plan(
         return None;
     }
     // Primary first.
-    if let Some(p) = primary {
-        if let Some(i) = mons.iter().position(|m| m == p) {
-            let m = mons.remove(i);
-            mons.insert(0, m);
-        }
+    if let Some(p) = primary
+        && let Some(i) = mons.iter().position(|m| m == p)
+    {
+        let m = mons.remove(i);
+        mons.insert(0, m);
     }
     // One scale for the whole desktop keeps the layout contiguous.
     let scale = mons[0].scale();
@@ -131,7 +131,7 @@ impl MonitorWindows {
             view.set_texture(texture.clone());
             view.set_remote_cursor(cursor.clone());
             let cb = on_host_action.clone();
-            view.connect_host_action(move |a| cb(a));
+            view.connect_host_action(cb);
 
             let window = gtk::Window::builder()
                 .application(app)

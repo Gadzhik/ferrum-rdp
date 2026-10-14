@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Ferrum
+GenericName=Remote Desktop Client
+Comment=Connect to Windows computers with RDP
+Exec=ferrum %U
+Icon=network-server
+Terminal=false
+Categories=Network;RemoteAccess;GTK;
+Keywords=RDP;Remote;Desktop;Windows;mstsc;FreeRDP;
+MimeType=application/x-rdp;
+StartupNotify=true
+StartupWMClass=dev.ferrum.Rdp
