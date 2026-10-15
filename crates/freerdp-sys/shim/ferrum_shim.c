@@ -489,8 +489,16 @@ static UINT send_client_format_list(ferrum_session* s)
 	const CLIPRDR_FORMAT_LIST list = { .common.msgType = CB_FORMAT_LIST,
 		                               .numFormats = (UINT32)s->n_client_formats,
 		                               .formats = s->client_formats };
-	cliprdr_file_context_clear(s->file);
+	if (s->file)
+		cliprdr_file_context_clear(s->file);
 	return s->cliprdr->ClientFormatList(s->cliprdr, &list);
+}
+
+/* The file context is optional (it needs a writable temp directory), so the
+ * session is reached through the rdpContext rather than ctx->custom. */
+static ferrum_session* clip_session(CliprdrClientContext* ctx)
+{
+	return ((ferrum_context*)ctx->rdpcontext)->s;
 }
 
 void ferrum_clip_local_offer(ferrum_session* s, const char* const* mimes, size_t count)
@@ -566,12 +574,13 @@ static UINT send_data_response(ferrum_session* s, const BYTE* data, size_t size)
 static UINT clip_monitor_ready(CliprdrClientContext* ctx,
                                WINPR_ATTR_UNUSED const CLIPRDR_MONITOR_READY* ready)
 {
-	ferrum_session* s = cliprdr_file_context_get_context(ctx->custom);
+	ferrum_session* s = clip_session(ctx);
 	CLIPRDR_GENERAL_CAPABILITY_SET general = {
 		.capabilitySetType = CB_CAPSTYPE_GENERAL,
 		.capabilitySetLength = 12,
 		.version = CB_CAPS_VERSION_2,
-		.generalFlags = CB_USE_LONG_FORMAT_NAMES | cliprdr_file_context_current_flags(s->file)
+		.generalFlags = CB_USE_LONG_FORMAT_NAMES |
+		                (s->file ? cliprdr_file_context_current_flags(s->file) : 0)
 	};
 	CLIPRDR_CAPABILITIES caps = { .cCapabilitiesSets = 1,
 		                          .capabilitySets = (CLIPRDR_CAPABILITY_SET*)&general };
@@ -588,9 +597,9 @@ static UINT clip_monitor_ready(CliprdrClientContext* ctx,
 
 static UINT clip_server_caps(CliprdrClientContext* ctx, const CLIPRDR_CAPABILITIES* caps)
 {
-	ferrum_session* s = cliprdr_file_context_get_context(ctx->custom);
+	ferrum_session* s = clip_session(ctx);
 	const BYTE* p = (const BYTE*)caps->capabilitySets;
-	if (!cliprdr_file_context_remote_set_flags(s->file, 0))
+	if (s->file && !cliprdr_file_context_remote_set_flags(s->file, 0))
 		return ERROR_INTERNAL_ERROR;
 	for (UINT32 i = 0; i < caps->cCapabilitiesSets; i++)
 	{
@@ -598,7 +607,7 @@ static UINT clip_server_caps(CliprdrClientContext* ctx, const CLIPRDR_CAPABILITI
 		if (c->capabilitySetType == CB_CAPSTYPE_GENERAL)
 		{
 			const CLIPRDR_GENERAL_CAPABILITY_SET* g = (const CLIPRDR_GENERAL_CAPABILITY_SET*)c;
-			if (!cliprdr_file_context_remote_set_flags(s->file, g->generalFlags))
+			if (s->file && !cliprdr_file_context_remote_set_flags(s->file, g->generalFlags))
 				return ERROR_INTERNAL_ERROR;
 		}
 		p += c->capabilitySetLength;
@@ -624,12 +633,13 @@ static BOOL server_has_format(ferrum_session* s, UINT32 id)
 
 static UINT clip_server_format_list(CliprdrClientContext* ctx, const CLIPRDR_FORMAT_LIST* list)
 {
-	ferrum_session* s = cliprdr_file_context_get_context(ctx->custom);
+	ferrum_session* s = clip_session(ctx);
 	BOOL text = FALSE, html = FALSE, image = FALSE, file = FALSE;
 
 	EnterCriticalSection(&s->clip_lock);
 	free_formats(&s->server_formats, &s->n_server_formats);
-	cliprdr_file_context_clear(s->file);
+	if (s->file)
+		cliprdr_file_context_clear(s->file);
 
 	s->server_formats = calloc(list->numFormats ? list->numFormats : 1, sizeof(CLIPRDR_FORMAT));
 	if (!s->server_formats)
@@ -669,7 +679,7 @@ static UINT clip_server_format_list(CliprdrClientContext* ctx, const CLIPRDR_FOR
 
 	const char* mimes[8];
 	size_t n = 0;
-	if (file && cliprdr_file_context_has_local_support(s->file))
+	if (file && s->file && cliprdr_file_context_has_local_support(s->file))
 	{
 		mimes[n++] = mime_uri_list;
 		mimes[n++] = mime_gnome_files;
@@ -703,7 +713,7 @@ static UINT clip_server_format_list_response(WINPR_ATTR_UNUSED CliprdrClientCont
 static UINT clip_server_data_request(CliprdrClientContext* ctx,
                                      const CLIPRDR_FORMAT_DATA_REQUEST* req)
 {
-	ferrum_session* s = cliprdr_file_context_get_context(ctx->custom);
+	ferrum_session* s = clip_session(ctx);
 	const UINT32 format_id = req->requestedFormatId;
 	UINT32 local_id = format_id;
 	const char* mime = nullptr;
@@ -783,7 +793,7 @@ static UINT clip_server_data_request(CliprdrClientContext* ctx,
 
 		BOOL ok = TRUE;
 		if (format_id == file_id)
-			ok = cliprdr_file_context_update_client_data(s->file, (const char*)data, len);
+			ok = s->file && cliprdr_file_context_update_client_data(s->file, (const char*)data, len);
 
 		if (ok && ClipboardSetData(s->system, local_id, data, (UINT32)len))
 			out = ClipboardGetData(s->system, format_id, &out_len);
@@ -851,7 +861,7 @@ void ferrum_clip_request_remote(ferrum_session* s, const char* mime, uint64_t re
 static UINT clip_server_data_response(CliprdrClientContext* ctx,
                                       const CLIPRDR_FORMAT_DATA_RESPONSE* resp)
 {
-	ferrum_session* s = cliprdr_file_context_get_context(ctx->custom);
+	ferrum_session* s = clip_session(ctx);
 	clip_request* rq = Queue_Dequeue(s->requests);
 	if (!rq)
 		return CHANNEL_RC_OK;
@@ -873,7 +883,7 @@ static UINT clip_server_data_response(CliprdrClientContext* ctx,
 		{
 			src = file_id;
 			dst = ClipboardGetFormatId(s->system, mime_uri_list);
-			if (!cliprdr_file_context_update_server_data(s->file, s->system,
+			if (!s->file || !cliprdr_file_context_update_server_data(s->file, s->system,
 			                                             resp->requestedFormatData,
 			                                             resp->common.dataLen))
 				src = 0;
@@ -937,14 +947,16 @@ static void clip_init(ferrum_session* s, CliprdrClientContext* cliprdr)
 	cliprdr->ServerFormatListResponse = clip_server_format_list_response;
 	cliprdr->ServerFormatDataRequest = clip_server_data_request;
 	cliprdr->ServerFormatDataResponse = clip_server_data_response;
-	cliprdr_file_context_init(s->file, cliprdr);
+	if (s->file)
+		cliprdr_file_context_init(s->file, cliprdr);
 	LeaveCriticalSection(&s->clip_lock);
 }
 
 static void clip_uninit(ferrum_session* s, CliprdrClientContext* cliprdr)
 {
 	EnterCriticalSection(&s->clip_lock);
-	cliprdr_file_context_uninit(s->file, cliprdr);
+	if (s->file)
+		cliprdr_file_context_uninit(s->file, cliprdr);
 	cliprdr->custom = nullptr;
 	s->cliprdr = nullptr;
 	s->clip_ready = FALSE;
@@ -1511,9 +1523,12 @@ ferrum_session* ferrum_session_new(const ferrum_callbacks* callbacks)
 	s->file = cliprdr_file_context_new(s);
 	s->requests = Queue_New(TRUE, -1, -1);
 	s->icons = HashTable_New(TRUE);
-	if (!s->system || !s->file || !s->requests || !s->icons)
+	if (!s->system || !s->requests || !s->icons)
 		goto fail;
-	cliprdr_file_context_set_locally_available(s->file, TRUE);
+	if (s->file)
+		cliprdr_file_context_set_locally_available(s->file, TRUE);
+	else
+		WLog_WARN(TAG, "file clipboard unavailable");
 	{
 		wObject* obj = Queue_Object(s->requests);
 		obj->fnObjectNew = clip_request_clone;
@@ -1539,7 +1554,8 @@ void ferrum_session_free(ferrum_session* s)
 		return;
 	if (s->context)
 		freerdp_client_context_free(s->context);
-	cliprdr_file_context_free(s->file);
+	if (s->file)
+		cliprdr_file_context_free(s->file);
 	ClipboardDestroy(s->system);
 	Queue_Free(s->requests);
 	HashTable_Free(s->icons);
