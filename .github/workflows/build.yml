@@ -34,6 +34,7 @@ jobs:
           install -Dm644 crates/ferrum/data/dev.ferrum.Rdp.desktop $d/share/applications/dev.ferrum.Rdp.desktop
           install -Dm644 crates/ferrum/data/ferrum-rdp.xml $d/share/mime/packages/ferrum-rdp.xml
           install -Dm644 README.md $d/README.md
+          install -Dm644 LICENSE $d/LICENSE
           tar czf $d.tar.gz $d
       - uses: actions/upload-artifact@v4
         with:
@@ -76,7 +77,7 @@ jobs:
           cp /ucrt64/share/glib-2.0/schemas/*.xml $d/share/glib-2.0/schemas/
           glib-compile-schemas $d/share/glib-2.0/schemas
           cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor $d/share/icons/
-          cp README.md $d/
+          cp README.md LICENSE $d/
           zip -qr $d.zip $d
       - uses: actions/upload-artifact@v4
         with:
@@ -100,7 +101,7 @@ jobs:
         run: |
           d=ferrum-macos-arm64
           mkdir -p $d
-          cp target/release/ferrum README.md $d/
+          cp target/release/ferrum README.md LICENSE $d/
           echo "Requires: brew install freerdp gtk4 libadwaita" > $d/REQUIREMENTS.txt
           tar czf $d.tar.gz $d
       - uses: actions/upload-artifact@v4

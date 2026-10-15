@@ -103,3 +103,7 @@ cargo test --workspace
 # headless smoke test against a server: saves a PNG of the remote screen
 cargo run -p rdp-core --example connect -- /v:host /u:user /p:pass out.png 5
 ```
+
+## License
+
+GPL-3.0-or-later, see [LICENSE](LICENSE).
