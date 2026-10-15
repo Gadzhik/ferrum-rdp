@@ -36,10 +36,24 @@ jobs:
           install -Dm644 README.md $d/README.md
           install -Dm644 LICENSE $d/LICENSE
           tar czf $d.tar.gz $d
+      - name: Arch package
+        run: |
+          git config --global --add safe.directory "$PWD"
+          ver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          useradd -m builder
+          mkdir /tmp/pkg
+          cp packaging/arch/PKGBUILD /tmp/pkg/
+          sed -i "s/^pkgver=.*/pkgver=$ver/" /tmp/pkg/PKGBUILD
+          git archive --prefix=ferrum-rdp-$ver/ -o /tmp/pkg/ferrum-rdp-$ver.tar.gz HEAD
+          chown -R builder /tmp/pkg
+          su builder -c 'cd /tmp/pkg && makepkg --nocheck --skipchecksums'
+          cp /tmp/pkg/*.pkg.tar.zst .
       - uses: actions/upload-artifact@v4
         with:
           name: ferrum-linux-x86_64
-          path: ferrum-linux-x86_64.tar.gz
+          path: |
+            ferrum-linux-x86_64.tar.gz
+            *.pkg.tar.zst
 
   windows:
     name: Windows (MSYS2 UCRT64)
@@ -79,17 +93,30 @@ jobs:
           cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor $d/share/icons/
           cp README.md LICENSE $d/
           zip -qr $d.zip $d
+          sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1 > version.txt
+      - name: Installer
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe")) {
+            choco install innosetup -y --no-progress
+          }
+          $ver = (Get-Content version.txt).Trim()
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\iscc.exe" /Qp "/DAppVersion=$ver" `
+            "/DSourceDir=$PWD\ferrum-windows-x86_64" packaging\windows\ferrum.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@v4
         with:
           name: ferrum-windows-x86_64
-          path: ferrum-windows-x86_64.zip
+          path: |
+            ferrum-windows-x86_64.zip
+            ferrum-*-setup.exe
 
   macos:
     name: macOS (Homebrew)
     runs-on: macos-latest
     steps:
       - name: Install dependencies
-        run: brew install pkgconf freerdp gtk4 libadwaita
+        run: brew install pkgconf freerdp gtk4 libadwaita dylibbundler
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -99,15 +126,12 @@ jobs:
         run: cargo build --release --locked -p ferrum
       - name: Package
         run: |
-          d=ferrum-macos-arm64
-          mkdir -p $d
-          cp target/release/ferrum README.md LICENSE $d/
-          echo "Requires: brew install freerdp gtk4 libadwaita" > $d/REQUIREMENTS.txt
-          tar czf $d.tar.gz $d
+          ver=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          packaging/macos/make-dmg.sh "$ver"
       - uses: actions/upload-artifact@v4
         with:
           name: ferrum-macos-arm64
-          path: ferrum-macos-arm64.tar.gz
+          path: ferrum-*-macos-arm64.dmg
 
   release:
     name: Release

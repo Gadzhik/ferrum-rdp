@@ -1,0 +1,43 @@
+# Maintainer: Gadzhik
+pkgname=ferrum-rdp
+pkgver=0.1.1
+pkgrel=1
+pkgdesc="RDP client on GTK4/libadwaita and FreeRDP 3"
+arch=('x86_64' 'aarch64')
+url="https://github.com/Gadzhik/ferrum-rdp"
+license=('GPL-3.0-or-later')
+depends=('freerdp>=2:3.10' 'gtk4' 'libadwaita' 'fuse3' 'glib2' 'gcc-libs' 'glibc')
+options=('!lto' '!debug')
+makedepends=('cargo' 'pkgconf')
+optdepends=('openssh: SSH tunnels'
+            'gnome-keyring: remember passwords (or any Secret Service provider)')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release -p ferrum
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo test --frozen --workspace
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/ferrum "$pkgdir/usr/bin/ferrum"
+  install -Dm644 crates/ferrum/data/dev.ferrum.Rdp.desktop "$pkgdir/usr/share/applications/dev.ferrum.Rdp.desktop"
+  install -Dm644 crates/ferrum/data/ferrum-rdp.xml "$pkgdir/usr/share/mime/packages/ferrum-rdp.xml"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

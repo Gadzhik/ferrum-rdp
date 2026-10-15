@@ -8,7 +8,9 @@ fn main() {
         .file("shim/ferrum_shim.c")
         .std("gnu2x")
         .warnings(true)
-        .flag_if_supported("-Wno-deprecated-declarations");
+        .flag_if_supported("-Wno-deprecated-declarations")
+        // Distro CFLAGS may enable GCC LTO; rust-lld cannot read GIMPLE objects.
+        .flag_if_supported("-fno-lto");
 
     // MinGW has no <threads.h> but does not say so; winpr's platform.h
     // would include it in C11 mode.

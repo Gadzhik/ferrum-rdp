@@ -38,11 +38,28 @@ Wayland, and the RDP protocol itself is handled by
   supported) and Wake-on-LAN before connecting.
 - **Automatic reconnection** when the connection drops.
 
+## Install
+
+Ready-made builds are on the [Releases](https://github.com/Gadzhik/ferrum-rdp/releases) page:
+
+- **Arch Linux:** `sudo pacman -U ferrum-rdp-*.pkg.tar.zst`
+- **Windows:** `ferrum-*-setup.exe`; it adds Ferrum to "Open with" for `.rdp`
+  files. A portable zip is there too. The installer is not signed, so
+  SmartScreen may warn about an unknown publisher.
+- **macOS (Apple Silicon):** open the `.dmg` and drag Ferrum to
+  Applications. The app is not signed or notarized: open it the first time
+  with right click → Open, or run
+  `xattr -dr com.apple.quarantine /Applications/Ferrum.app`.
+
+Passwords are remembered only on Linux (Secret Service).
+
 ## Build
 
 ```sh
 sudo pacman -S --needed freerdp fuse3 gtk4 libadwaita   # Arch / Omarchy
 ./install.sh            # installs into ~/.local
+# or build a pacman package:
+cd packaging/arch && makepkg -si
 ```
 
 ## Usage
