@@ -20,6 +20,14 @@ pub struct ConnectParams {
     pub keyboard_layout: Option<u32>,
 }
 
+/// Audio backend for `/sound` and `/microphone`. PulseAudio covers
+/// PipeWire on Linux; elsewhere FreeRDP picks the platform default (winmm on
+/// Windows, CoreAudio on macOS). A missing backend fails the whole connection.
+#[cfg(all(unix, not(target_os = "macos")))]
+const AUDIO_SYS: &str = ":sys:pulse";
+#[cfg(not(all(unix, not(target_os = "macos"))))]
+const AUDIO_SYS: &str = "";
+
 fn bool_flag(args: &mut Vec<String>, name: &str, on: bool) {
     args.push(format!("{}{name}", if on { '+' } else { '-' }));
 }
@@ -208,12 +216,12 @@ pub fn to_args(p: &Profile, params: &ConnectParams) -> Vec<String> {
         a.push(format!("/clipboard:direction-to:{dir},files-to:{files}"));
     }
     match r.audio {
-        AudioMode::Local => a.push("/sound:sys:pulse".into()),
+        AudioMode::Local => a.push(format!("/sound{AUDIO_SYS}")),
         AudioMode::Remote => a.push("/audio-mode:1".into()),
         AudioMode::Off => a.push("/audio-mode:2".into()),
     }
     if r.microphone {
-        a.push("/microphone:sys:pulse".into());
+        a.push(format!("/microphone{AUDIO_SYS}"));
     }
     for f in &r.folders {
         if !f.path.is_empty() {
@@ -418,7 +426,7 @@ mod tests {
         assert!(has(&a, "/d:CORP"));
         assert!(has(&a, "/p:pw"));
         assert!(has(&a, "+dynamic-resolution"));
-        assert!(has(&a, "/sound:sys:pulse"));
+        assert!(has(&a, &format!("/sound{AUDIO_SYS}")));
         assert!(has(&a, "/clipboard:direction-to:all,files-to:all"));
     }
 

@@ -84,6 +84,8 @@ jobs:
           # Runtime DLLs, including those pulled in by pixbuf loaders.
           cp -r /ucrt64/lib/gdk-pixbuf-2.0 $d/lib/
           [ -d /ucrt64/lib/freerdp3 ] && cp -r /ucrt64/lib/freerdp3 $d/lib/
+          # OpenSSL legacy provider: MD4 for NTLM.
+          cp -r /ucrt64/lib/ossl-modules $d/lib/
           for f in $d/bin/ferrum.exe $(find $d/lib -name '*.dll'); do
             ldd "$f" | awk '/\/ucrt64\// {print $3}'
           done | sort -u | xargs -r cp -t $d/bin/

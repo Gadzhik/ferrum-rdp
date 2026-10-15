@@ -107,6 +107,50 @@ pub fn xkb_to_rdp(keycode: u32) -> Option<u32> {
     keycode.checked_sub(8).and_then(evdev_to_rdp)
 }
 
+/// Map a Windows virtual-key code to an RDP scancode. On Windows GTK reports
+/// the virtual-key code as `hardware_keycode`, not an XKB keycode.
+///
+/// The generic VK_SHIFT/VK_CONTROL/VK_MENU map to the left-hand keys; the
+/// caller tells right-hand keys apart by keyval.
+#[cfg(windows)]
+pub fn vk_to_rdp(vk: u32) -> Option<u32> {
+    #[link(name = "user32")]
+    unsafe extern "system" {
+        fn MapVirtualKeyW(code: u32, map_type: u32) -> u32;
+    }
+    const MAPVK_VK_TO_VSC_EX: u32 = 4;
+    const VK_PAUSE: u32 = 0x13;
+    const VK_SNAPSHOT: u32 = 0x2C;
+    const VK_NUMLOCK: u32 = 0x90;
+
+    match vk {
+        VK_PAUSE => return Some(PAUSE),
+        VK_SNAPSHOT => return Some(ext(0x37)),
+        VK_NUMLOCK => return Some(0x45),
+        _ => {}
+    }
+    // MapVirtualKey drops the E0 prefix for some keys (arrows, Home/End,
+    // Insert/Delete, ...), which the remote side would read as the keypad.
+    let extended = matches!(
+        vk,
+        0x21..=0x28 // PageUp, PageDown, End, Home, arrows
+            | 0x2D | 0x2E // Insert, Delete
+            | 0x5B..=0x5D // LWin, RWin, Apps
+            | 0x6F // keypad divide
+            | 0xA3 | 0xA5 // RControl, RMenu
+            | 0xA6..=0xB7 // browser, volume and media keys
+    );
+    // SAFETY: plain Win32 call without pointers.
+    let sc = unsafe { MapVirtualKeyW(vk, MAPVK_VK_TO_VSC_EX) };
+    match sc >> 8 {
+        _ if sc == 0 => None,
+        0 if extended => Some(ext(sc)),
+        0 => Some(sc),
+        0xE0 => Some(ext(sc & 0xFF)),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,5 +177,18 @@ mod tests {
         assert_eq!(xkb_to_rdp(9), Some(0x01));
         assert_eq!(xkb_to_rdp(3), None);
         assert_eq!(xkb_to_rdp(8), None);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_virtual_keys() {
+        assert_eq!(vk_to_rdp(0x11), Some(0x1D)); // VK_CONTROL
+        assert_eq!(vk_to_rdp(0x10), Some(0x2A)); // VK_SHIFT
+        assert_eq!(vk_to_rdp(0x0D), Some(0x1C)); // VK_RETURN
+        assert_eq!(vk_to_rdp(0x1B), Some(0x01)); // VK_ESCAPE
+        assert_eq!(vk_to_rdp(0x25), Some(0x14B)); // VK_LEFT
+        assert_eq!(vk_to_rdp(0x2E), Some(0x153)); // VK_DELETE
+        assert_eq!(vk_to_rdp(0x5B), Some(0x15B)); // VK_LWIN
+        assert_eq!(vk_to_rdp(0x13), Some(PAUSE));
     }
 }

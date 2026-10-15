@@ -51,7 +51,8 @@ Ready-made builds are on the [Releases](https://github.com/Gadzhik/ferrum-rdp/re
   with right click → Open, or run
   `xattr -dr com.apple.quarantine /Applications/Ferrum.app`.
 
-Passwords are remembered only on Linux (Secret Service).
+Passwords are remembered on Linux (Secret Service) and Windows (Credential
+Manager).
 
 ## Build
 

@@ -54,6 +54,8 @@ struct ferrum_session
 	BOOL active;
 	DispClientContext* disp;
 	BOOL disp_activated;
+	/* lock key state last sent with ferrum_input_sync_locks */
+	UINT32 sync_flags;
 	RailClientContext* rail;
 
 	/* clipboard */
@@ -955,9 +957,14 @@ static void clip_init(ferrum_session* s, CliprdrClientContext* cliprdr)
 static void clip_uninit(ferrum_session* s, CliprdrClientContext* cliprdr)
 {
 	EnterCriticalSection(&s->clip_lock);
-	if (s->file)
-		cliprdr_file_context_uninit(s->file, cliprdr);
-	cliprdr->custom = nullptr;
+	/* FreeRDP reports a NULL interface when the channel never came up,
+	 * e.g. when the connection fails before channels are connected. */
+	if (cliprdr)
+	{
+		if (s->file)
+			cliprdr_file_context_uninit(s->file, cliprdr);
+		cliprdr->custom = nullptr;
+	}
 	s->cliprdr = nullptr;
 	s->clip_ready = FALSE;
 	LeaveCriticalSection(&s->clip_lock);
@@ -1271,7 +1278,11 @@ void ferrum_rail_exec(ferrum_session* s, const char* program, const char* workdi
 static void on_channel_connected(void* context, const ChannelConnectedEventArgs* e)
 {
 	ferrum_session* s = get_session(context);
-	if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
+	if (!s || !e->name)
+		return;
+	if (!e->pInterface)
+		freerdp_client_OnChannelConnectedEventHandler(context, e);
+	else if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
 		clip_init(s, (CliprdrClientContext*)e->pInterface);
 	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
 	{
@@ -1291,6 +1302,8 @@ static void on_channel_connected(void* context, const ChannelConnectedEventArgs*
 static void on_channel_disconnected(void* context, const ChannelDisconnectedEventArgs* e)
 {
 	ferrum_session* s = get_session(context);
+	if (!s || !e->name)
+		return;
 	if (strcmp(e->name, CLIPRDR_SVC_CHANNEL_NAME) == 0)
 		clip_uninit(s, (CliprdrClientContext*)e->pInterface);
 	else if (strcmp(e->name, DISP_DVC_CHANNEL_NAME) == 0)
@@ -1756,12 +1769,17 @@ void ferrum_input_sync_locks(ferrum_session* s, bool scroll, bool num, bool caps
 {
 	UINT32 flags = (scroll ? KBD_SYNC_SCROLL_LOCK : 0) | (num ? KBD_SYNC_NUM_LOCK : 0) |
 	               (caps ? KBD_SYNC_CAPS_LOCK : 0) | (kana ? KBD_SYNC_KANA_LOCK : 0);
-	WITH_ACTIVE(s, freerdp_input_send_synchronize_event(s->context->input, flags));
+	WITH_ACTIVE(s, {
+		s->sync_flags = flags;
+		freerdp_input_send_synchronize_event(s->context->input, flags);
+	});
 }
 
 void ferrum_input_focus_in(ferrum_session* s)
 {
-	WITH_ACTIVE(s, freerdp_input_send_focus_in_event(s->context->input, 0));
+	/* the focus-in event carries the toggle states too: 0 would switch off
+	 * Num Lock right after ferrum_input_sync_locks set it */
+	WITH_ACTIVE(s, freerdp_input_send_focus_in_event(s->context->input, (UINT16)s->sync_flags));
 }
 
 static UINT16 clamp16(int32_t v)

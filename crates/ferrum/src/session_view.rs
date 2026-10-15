@@ -302,6 +302,13 @@ impl SessionView {
     }
 
     fn apply_grab(&self, grab: bool) {
+        // GTK cannot inhibit system shortcuts on Windows: hook the keyboard.
+        #[cfg(windows)]
+        if grab {
+            crate::winkbd::activate(self);
+        } else {
+            crate::winkbd::deactivate(self);
+        }
         let Some(toplevel) = self
             .native()
             .and_then(|n| n.surface())
@@ -330,7 +337,7 @@ impl SessionView {
         );
     }
 
-    fn host_action(&self, action: HostAction) {
+    pub(crate) fn host_action(&self, action: HostAction) {
         if let Some(cb) = self.imp().host_cb.borrow().as_ref() {
             cb(action);
         }
@@ -448,20 +455,27 @@ impl SessionView {
         if imp.view_only.get() {
             return glib::Propagation::Stop;
         }
+        // The low-level hook already sent this key with its real scancode.
+        #[cfg(windows)]
+        if crate::winkbd::is_active() {
+            return glib::Propagation::Stop;
+        }
         let Some(handle) = self.handle() else {
             return glib::Propagation::Proceed;
         };
 
-        match keymap::xkb_to_rdp(keycode) {
-            Some(sc) => {
-                let repeat = if down {
-                    !imp.pressed_keys.borrow_mut().insert(sc)
-                } else {
-                    imp.pressed_keys.borrow_mut().remove(&sc);
-                    false
-                };
-                handle.key(sc, down, repeat);
-            }
+        #[cfg(not(windows))]
+        let scancode = keymap::xkb_to_rdp(keycode);
+        #[cfg(windows)]
+        let scancode = keymap::vk_to_rdp(keycode).map(|sc| match keyval {
+            gdk::Key::Shift_R => 0x36,
+            gdk::Key::Control_R => keymap::EXTENDED | 0x1D,
+            gdk::Key::Alt_R | gdk::Key::ISO_Level3_Shift => keymap::EXTENDED | 0x38,
+            gdk::Key::KP_Enter => keymap::EXTENDED | 0x1C,
+            _ => sc,
+        });
+        match scancode {
+            Some(sc) => self.send_scancode(sc, down),
             None => {
                 // Keys without a scancode (e.g. from an on-screen keyboard): send as unicode.
                 if let Some(ch) = keyval.to_unicode().filter(|c| !c.is_control()) {
@@ -470,6 +484,29 @@ impl SessionView {
             }
         }
         glib::Propagation::Stop
+    }
+
+    /// Whether `sc` was pressed on the remote side and not released yet.
+    #[cfg(windows)]
+    pub(crate) fn key_held(&self, sc: u32) -> bool {
+        self.imp().pressed_keys.borrow().contains(&sc)
+    }
+
+    /// Send one key press or release, tracking held keys for auto-repeat and
+    /// for [`Self::release_all`].
+    pub(crate) fn send_scancode(&self, sc: u32, down: bool) {
+        let imp = self.imp();
+        if imp.view_only.get() {
+            return;
+        }
+        let Some(handle) = self.handle() else { return };
+        let repeat = if down {
+            !imp.pressed_keys.borrow_mut().insert(sc)
+        } else {
+            imp.pressed_keys.borrow_mut().remove(&sc);
+            false
+        };
+        handle.key(sc, down, repeat);
     }
 
     fn on_motion(&self, x: f64, y: f64) {
