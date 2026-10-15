@@ -1,0 +1,125 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux:
+    name: Linux (Arch)
+    runs-on: ubuntu-latest
+    # Ubuntu ships FreeRDP/GTK/libadwaita that are too old; Arch has current ones.
+    container: archlinux:latest
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed base-devel git rust pkgconf \
+            freerdp gtk4 libadwaita fuse3
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --release --locked -p ferrum
+      - name: Package
+        run: |
+          d=ferrum-linux-x86_64
+          install -Dm755 target/release/ferrum $d/bin/ferrum
+          install -Dm644 crates/ferrum/data/dev.ferrum.Rdp.desktop $d/share/applications/dev.ferrum.Rdp.desktop
+          install -Dm644 crates/ferrum/data/ferrum-rdp.xml $d/share/mime/packages/ferrum-rdp.xml
+          install -Dm644 README.md $d/README.md
+          tar czf $d.tar.gz $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferrum-linux-x86_64
+          path: ferrum-linux-x86_64.tar.gz
+
+  windows:
+    name: Windows (MSYS2 UCRT64)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          pacboy: >-
+            rust:p gcc:p pkgconf:p freerdp:p gtk4:p libadwaita:p
+          install: zip
+      - uses: actions/checkout@v4
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --release --locked -p ferrum
+      - name: Package
+        run: |
+          set -euo pipefail
+          d=ferrum-windows-x86_64
+          mkdir -p $d/bin $d/lib $d/share/glib-2.0/schemas $d/share/icons
+          cp target/release/ferrum.exe $d/bin/
+          # Runtime DLLs, including those pulled in by pixbuf loaders.
+          cp -r /ucrt64/lib/gdk-pixbuf-2.0 $d/lib/
+          [ -d /ucrt64/lib/freerdp3 ] && cp -r /ucrt64/lib/freerdp3 $d/lib/
+          for f in $d/bin/ferrum.exe $(find $d/lib -name '*.dll'); do
+            ldd "$f" | awk '/\/ucrt64\// {print $3}'
+          done | sort -u | xargs -r cp -t $d/bin/
+          cp /ucrt64/bin/gdbus.exe $d/bin/ 2>/dev/null || true
+          cp /ucrt64/share/glib-2.0/schemas/*.xml $d/share/glib-2.0/schemas/
+          glib-compile-schemas $d/share/glib-2.0/schemas
+          cp -r /ucrt64/share/icons/Adwaita /ucrt64/share/icons/hicolor $d/share/icons/
+          cp README.md $d/
+          zip -qr $d.zip $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferrum-windows-x86_64
+          path: ferrum-windows-x86_64.zip
+
+  macos:
+    name: macOS (Homebrew)
+    runs-on: macos-latest
+    steps:
+      - name: Install dependencies
+        run: brew install pkgconf freerdp gtk4 libadwaita
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build
+        run: cargo build --release --locked -p ferrum
+      - name: Package
+        run: |
+          d=ferrum-macos-arm64
+          mkdir -p $d
+          cp target/release/ferrum README.md $d/
+          echo "Requires: brew install freerdp gtk4 libadwaita" > $d/REQUIREMENTS.txt
+          tar czf $d.tar.gz $d
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ferrum-macos-arm64
+          path: ferrum-macos-arm64.tar.gz
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*

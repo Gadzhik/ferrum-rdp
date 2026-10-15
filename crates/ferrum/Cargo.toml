@@ -12,8 +12,11 @@ gtk = { package = "gtk4", version = "0.11", features = ["v4_18", "gio_v2_80"] }
 adw = { package = "libadwaita", version = "0.9", features = ["v1_7"] }
 async-channel = "2"
 clap = { version = "4", features = ["derive"] }
-oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
 anyhow.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 uuid.workspace = true
+
+# Secret Service exists only on Linux/BSD desktops.
+[target.'cfg(target_os = "linux")'.dependencies]
+oo7 = { version = "0.6", default-features = false, features = ["async-std", "native_crypto"] }
