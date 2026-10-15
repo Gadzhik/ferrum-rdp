@@ -10,6 +10,12 @@ fn main() {
         .warnings(true)
         .flag_if_supported("-Wno-deprecated-declarations");
 
+    // MinGW has no <threads.h> but does not say so; winpr's platform.h
+    // would include it in C11 mode.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        build.define("__STDC_NO_THREADS__", "1");
+    }
+
     for lib in ["freerdp3", "freerdp-client3", "winpr3"] {
         let lib = pkg_config::Config::new()
             .atleast_version("3.10")

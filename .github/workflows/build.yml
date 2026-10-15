@@ -21,7 +21,7 @@ jobs:
         run: |
           pacman -Syu --noconfirm --needed base-devel git rust pkgconf \
             freerdp gtk4 libadwaita fuse3
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
       - name: Test
         run: cargo test --workspace --locked
@@ -54,7 +54,7 @@ jobs:
           pacboy: >-
             rust:p gcc:p pkgconf:p freerdp:p gtk4:p libadwaita:p
           install: zip
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: Swatinem/rust-cache@v2
       - name: Test
         run: cargo test --workspace --locked
@@ -89,7 +89,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: brew install pkgconf freerdp gtk4 libadwaita
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test

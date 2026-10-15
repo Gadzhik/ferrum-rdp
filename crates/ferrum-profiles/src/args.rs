@@ -24,13 +24,27 @@ fn bool_flag(args: &mut Vec<String>, name: &str, on: bool) {
     args.push(format!("{}{name}", if on { '+' } else { '-' }));
 }
 
+/// Quote one comma-separated sub-option for FreeRDP.
+///
+/// FreeRDP only accepts quotes around a whole element (`"cmd:a, b"`, not
+/// `cmd:"a, b"`), and a backslash escapes the next character, so a trailing
+/// one (`C:\`) would swallow the separator. Doubling it keeps Windows paths
+/// valid.
 fn esc(v: &str) -> String {
-    // FreeRDP splits sub-options on ',' — quote values that contain one.
-    if v.contains(',') {
-        format!("\"{v}\"")
-    } else {
-        v.to_string()
+    let mut s = v.to_string();
+    if s.chars().rev().take_while(|&c| c == '\\').count() % 2 == 1 {
+        s.push('\\');
     }
+    if s.contains(',') {
+        format!("\"{s}\"")
+    } else {
+        s
+    }
+}
+
+/// A `key:value` sub-option.
+fn opt(key: &str, v: &str) -> String {
+    esc(&format!("{key}:{v}"))
 }
 
 /// Snap a percent scale to the device scale factors RDP knows about.
@@ -120,7 +134,7 @@ pub fn to_args(p: &Profile, params: &ConnectParams) -> Vec<String> {
         a.push("/cert:ignore".into());
     }
     if !p.security.kdc_url.is_empty() {
-        a.push(format!("/kerberos:kdc-url:{}", esc(&p.security.kdc_url)));
+        a.push(format!("/kerberos:{}", opt("kdc-url", &p.security.kdc_url)));
     }
     if p.security.smartcard_logon {
         a.push("/smartcard-logon".into());
@@ -142,23 +156,23 @@ pub fn to_args(p: &Profile, params: &ConnectParams) -> Vec<String> {
         }];
         if g.same_credentials {
             if !p.username.is_empty() {
-                opts.push(format!("u:{}", esc(&p.username)));
+                opts.push(opt("u", &p.username));
             }
             if !p.domain.is_empty() {
-                opts.push(format!("d:{}", esc(&p.domain)));
+                opts.push(opt("d", &p.domain));
             }
             if let Some(pw) = &params.password {
-                opts.push(format!("p:{}", esc(pw)));
+                opts.push(opt("p", pw));
             }
         } else {
             if !g.username.is_empty() {
-                opts.push(format!("u:{}", esc(&g.username)));
+                opts.push(opt("u", &g.username));
             }
             if !g.domain.is_empty() {
-                opts.push(format!("d:{}", esc(&g.domain)));
+                opts.push(opt("d", &g.domain));
             }
             if let Some(pw) = &params.gateway_password {
-                opts.push(format!("p:{}", esc(pw)));
+                opts.push(opt("p", pw));
             }
         }
         opts.push(format!(
@@ -286,15 +300,15 @@ pub fn to_args(p: &Profile, params: &ConnectParams) -> Vec<String> {
     // --- RemoteApp ---
     let app = &p.remote_app;
     if app.enabled && !app.program.is_empty() {
-        let mut opts = vec![format!("program:{}", esc(&app.program))];
+        let mut opts = vec![opt("program", &app.program)];
         if !app.name.is_empty() {
-            opts.push(format!("name:{}", esc(&app.name)));
+            opts.push(opt("name", &app.name));
         }
         if !app.args.is_empty() {
-            opts.push(format!("cmd:{}", esc(&app.args)));
+            opts.push(opt("cmd", &app.args));
         }
         if !app.workdir.is_empty() {
-            opts.push(format!("workdir:{}", esc(&app.workdir)));
+            opts.push(opt("workdir", &app.workdir));
         }
         a.push(format!("/app:{}", opts.join(",")));
     }
@@ -344,7 +358,13 @@ pub fn redact(args: &[String]) -> Vec<String> {
             } else if a.starts_with("/gateway:") {
                 split_options(a)
                     .into_iter()
-                    .map(|o| if o.starts_with("p:") { "p:********" } else { o })
+                    .map(|o| {
+                        if o.trim_start_matches('"').starts_with("p:") {
+                            "p:********"
+                        } else {
+                            o
+                        }
+                    })
                     .collect::<Vec<_>>()
                     .join(",")
             } else {
@@ -436,7 +456,7 @@ mod tests {
         let gw = a.iter().find(|a| a.starts_with("/gateway:")).unwrap();
         assert_eq!(
             gw,
-            "/gateway:g:gw.example.com,u:u,p:\"s,ecret\",usage-method:direct,type:auto"
+            "/gateway:g:gw.example.com,u:u,\"p:s,ecret\",usage-method:direct,type:auto"
         );
         let red = redact(&a);
         assert!(red.iter().all(|a| !a.contains("ecret")));
@@ -484,6 +504,14 @@ mod tests {
         assert!(has(&a, "/scale-desktop:150"));
         assert!(has(&a, "/scale-device:140"));
         assert!(!has(&a, "+dynamic-resolution"));
+    }
+
+    #[test]
+    fn sub_option_quoting() {
+        assert_eq!(opt("u", "bob"), "u:bob");
+        assert_eq!(opt("cmd", "a, b"), "\"cmd:a, b\"");
+        assert_eq!(opt("workdir", "C:\\"), "workdir:C:\\\\");
+        assert_eq!(esc("C:\\\\"), "C:\\\\");
     }
 
     #[test]
