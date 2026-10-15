@@ -565,7 +565,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "async-channel",
@@ -582,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "ferrum-profiles"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anyhow",
  "directories",
@@ -622,7 +622,7 @@ dependencies = [
 
 [[package]]
 name = "freerdp-sys"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "cc",
  "pkg-config",
@@ -1514,7 +1514,7 @@ dependencies = [
 
 [[package]]
 name = "rdp-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "freerdp-sys",
  "png",

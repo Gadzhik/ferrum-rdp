@@ -1,5 +1,5 @@
 ; Inno Setup script. Built by CI from the portable bundle:
-;   iscc /DAppVersion=0.1.1 /DSourceDir=..\..\ferrum-windows-x86_64 ferrum.iss
+;   iscc /DAppVersion=0.1.2 /DSourceDir=..\..\ferrum-windows-x86_64 ferrum.iss
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"

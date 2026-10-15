@@ -1,6 +1,6 @@
 # Maintainer: Gadzhik
 pkgname=ferrum-rdp
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc="RDP client on GTK4/libadwaita and FreeRDP 3"
 arch=('x86_64' 'aarch64')
